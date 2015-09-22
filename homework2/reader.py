@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 from sys import argv
-from os import listdir
+from os import listdir, remove
 from os.path import isfile, join
 import numbers
 import numpy as np
@@ -43,18 +43,22 @@ def getWindow(fileCon, measurements):
 	windowsMeas = {'stdDev':np.std(buffered), 'mean':np.mean(buffered)}
 	
 	#Now that we have the necessary data measurements, we can compare them
-	if windowsStdDeviation > measurements['stdDev']*1.2:
+	if windowsMeas['stdDev'] > measurements['stdDev']*1.2:
 		return True
 
 	
 
 
 directory = argv[1]
-ouput = open('output.txt', 'a')
+if isfile('output.txt'):
+	remove('output.txt')
+output = open('output.txt', 'a')
+output.truncate()
 files = [ f for f in listdir(directory) if isfile(join(directory,f)) ]
 #Get each file in the provided directory
 for txtFile in files:
 	print(txtFile)
+	outputLine = txtFile+'\t'
 	fileCon = open(directory+'/'+txtFile, 'r')
 	baseline = []
 	#We are assuming, given the assignment guidelines, that the first
@@ -68,7 +72,12 @@ for txtFile in files:
 		while not getWindow(fileCon, measurements):
 			lineCount += window
 		print("Change found on line "+str(lineCount))
+		outputLine += str(lineCount)+'\n'
 	except EOFError:
 		print("No changes found in file")
+		outputLine += '-1\n'
 
+	output.write(outputLine)
+	fileCon.close()
 
+output.close()
