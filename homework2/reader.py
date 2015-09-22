@@ -7,26 +7,43 @@ import numpy as np
 
 conversions = {'a':0, 'b':1, 'c':2, 'd':3,'e':4}
 window = 10
+baselineSize = 50
 
+
+#This cleaning function strips out any extra whitespace, 
+#converts any letters to numbers (see paper for explanation),
+#and converts all string objects to floats for calculation
 def clean(line):
 	line = line.strip()
 	global conversions
-	if conversions[line] is not None:
+	if line in conversions:
 		line = conversions[line]
+	return float(line)
 
 
-def getWindow(fileCon, stdDeviation):
+#Takes as arguments a file object and a dict of 
+#baseline measurements (std deviation, mean, see usage below)
+#gets the next window of samples and determines if they 
+#are acceptably close to the measurements given
+#If the next "window" of samples is within range, a False is returned,
+#if they are outside range, True is returned (it is up to the caller to
+#keep track of which line in the file has been reached, based on the 
+#global "window" variable)
+#If the end of the file is reached, the file object is set to 
+#None, so it is easy for the caller to tell if the end of the
+#file has been reached or not
+def getWindow(fileCon, measurements):
 	global window
 	buffered = []
 	for i in range(window):
 		line = fileCon.readline()
 		if line == "":
-			fileCon = None
-			return False
+			raise EOFError("No samples, or too few samples in file")
 		buffered.append(clean(line))
-	windowsStdDeviation = np.std(buffered)
-	#windowsMean = np.mean(buffered)
-	if windowsStdDeviation > stdDeviation*1.5:
+	windowsMeas = {'stdDev':np.std(buffered), 'mean':np.mean(buffered)}
+	
+	#Now that we have the necessary data measurements, we can compare them
+	if windowsStdDeviation > measurements['stdDev']*1.2:
 		return True
 
 	
@@ -35,40 +52,23 @@ def getWindow(fileCon, stdDeviation):
 directory = argv[1]
 ouput = open('output.txt', 'a')
 files = [ f for f in listdir(directory) if isfile(join(directory,f)) ]
-#print(files)
+#Get each file in the provided directory
 for txtFile in files:
-	f = open(directory+'/'+txtFile, 'r')
+	print(txtFile)
+	fileCon = open(directory+'/'+txtFile, 'r')
 	baseline = []
-	#doing some baseline measurin'
-	while i in range(50):
-		baseline.append(clean(f.readline())
-		i += 1
+	#We are assuming, given the assignment guidelines, that the first
+	#50 samples can be used for baseline measurements
+	for i in range(baselineSize+1):
+		baseline.append(clean(fileCon.readline()))
 
-	stdDeviation = np.std(baseline)
-	line = f.readline()
-	while fileCon is not None:
-		if getWindow(fileCon, stdDeviaton):
-			fileCon.tell()
-			print("CHAHAHHANGNGNNES")
-
-
-
-
-
-		
+	measurements = {'mean':np.mean(baseline), 'stdDev':np.std(baseline)}
+	lineCount = baselineSize
+	try:
+		while not getWindow(fileCon, measurements):
+			lineCount += window
+		print("Change found on line "+str(lineCount))
+	except EOFError:
+		print("No changes found in file")
 
 
-
-	#print(dataArray[0])
-	#if dataArray[0] != 'a' and dataArray[0] != 'b':
-	#	dataArray = list(filter(None, dataArray))
-	#	dataArray = [float(x) for x in dataArray]
-		#print(dataArray)
-		#plt.plot(dataArray)
-		#plt.ylabel('some numbers')
-		#plt.show()
-	#	print(np.std(dataArray[0:49]))
-	#write a line to output
-#window = 10
-
-#for char in data:
