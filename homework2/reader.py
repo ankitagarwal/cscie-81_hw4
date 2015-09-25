@@ -9,13 +9,13 @@ from scipy.stats import f
 
 
 conversions = {'a':0, 'b':1, 'c':2, 'd':3,'e':4}
-window = 10
+window = 5
 baselineSize = 50
-#The chance of being wrong that we think is acceptable. 
-#The flipside is that the lower the chance the greater the
-#variability that we accept as normal. Since this is a two
-#tailed test it is /2  
-alphaVar = 0.01 / 2
+#Currently using the standard .05 alpha level, which gives us a
+#high degree of confidence that a change is valid
+#We are dividing by 2 for the two tailed test
+confidence = .95
+alphaVar = (1-confidence) / 2
   
 
 
@@ -23,8 +23,10 @@ alphaVar = 0.01 / 2
 #This cleaning function strips out any extra whitespace, 
 #converts any letters to numbers (see paper for explanation),
 #and converts all string objects to floats for calculation
-def clean(line):
-	line = line.strip()
+def safeGet(fileObj):
+	line = fileObj.readline().strip()
+	if line == "":
+		return line
 	global conversions
 	if line in conversions:
 		line = conversions[line]
@@ -43,40 +45,48 @@ def clean(line):
 #If the end of the file is reached, the file object is set to 
 #None, so it is easy for the caller to tell if the end of the
 #file has been reached or not
-def getWindow(fileCon, measurements, varience):
+def getWindow(fileCon, measurements):
 	global window
 	global alphaVar
 	global baselineSize
 	
 	buffered = []
 	for i in range(window):
-		line = fileCon.readline()
+		line = safeGet(fileCon)
 		if line == "":
 			raise EOFError("No samples, or too few samples in file")
-		buffered.append(clean(line))
-	windowsMeas = {'stdDev':np.std(buffered), 'mean':np.mean(buffered)}
-	windowVar = np.var(buffered)
+		buffered.append(line)
+	windowMeas = {'stdDev':np.std(buffered), 'mean':np.mean(buffered), 'var':np.var(buffered), 'sem':sp.stats.sem(buffered, ddof=0)}
 	pValue = 0.0
 	
 	#A variance of 0 means we can't perform the F-test
-	if(windowVar != 0):
+	if(windowMeas['var'] != 0):
 		#variance has increased
-		if(windowVar > varience):
-			pValue = sp.stats.f.sf((windowVar / varience), window - 1, baselineSize - 1)
+		if(windowMeas['var'] > measurements['var']):
+			pValue = sp.stats.f.sf((windowMeas['var'] / measurements['var']), window - 1, baselineSize - 1)
 		#variance has decreased
 		else:
-			pValue = sp.stats.f.sf((varience / windowVar), baselineSize - 1, window - 1)
+			pValue = sp.stats.f.sf((measurements['var'] / windowMeas['var']), baselineSize - 1, window - 1)
 		if  pValue < alphaVar:
 			print("Variance ", end="")
 			return True
+
+
+	#Calculate confidence in the mean
+	stdErrDiff = sp.sqrt(windowMeas['sem']**2+measurements['sem']**2)
+	meanInterval = sp.stats.norm.interval(confidence)*stdErrDiff
+	print(meanInterval)
+	
+
 #	else:
 		#in the end this should be removed, but right now it could help tell
 		#us how big the window should be. The larger the window the less likely
 		#it is that we will happen to get an buffered of all 1 number. 
 #		print("The variance of this window is 0")
-	
+
+	#Calculate cumulative probability density
 	#Now that we have the necessary data measurements, we can compare them
-	if windowsMeas['stdDev'] > measurements['stdDev']*1.2:
+	if windowMeas['stdDev'] > measurements['stdDev']*1.2:
 		print("Mean ", end="")
 		return True
 
@@ -141,18 +151,35 @@ files = [ f for f in listdir(directory) if isfile(join(directory,f)) ]
 for txtFile in files:
 	print(txtFile)
 	outputLine = txtFile+'\t'
+	#TESTING
+	fileCon = open(directory+'/'+txtFile, 'r')
+	allData = []
+	line = safeGet(fileCon)
+	while line != "":
+		allData.append(line)
+		line = safeGet(fileCon)
+	plt.plot(allData)
+	plt.show()
+	fileCon.close()
+	#TESTING
+
 	fileCon = open(directory+'/'+txtFile, 'r')
 	baseline = []
 	#We are assuming, given the assignment guidelines, that the first
 	#50 samples can be used for baseline measurements
 	for i in range(baselineSize+1):
-		baseline.append(clean(fileCon.readline()))
+		line = safeGet(fileCon)
+		baseline.append(line)
 
 	#added variance to measurements
-	measurements = {'mean':np.mean(baseline), 'stdDev':np.std(baseline)}
+	measurements = {'mean':np.mean(baseline), 'stdDev':np.std(baseline), 'var':np.var(baseline), 'sem':sp.stats.sem(baseline, ddof=0)}
+	
+	#scale = measurements['stdDev']/sp.sqrt(baselineSize)
+	#interval = stats.norm.interval(confidence, loc=measurements['mean'], scale=scale)
+	#measurements.append['interval':interval]
 	lineCount = baselineSize
 	try:
-		while not getWindow(fileCon, measurements, np.var(baseline)):
+		while not getWindow(fileCon, measurements):
 			lineCount += window
 		print("change found on line "+str(lineCount))
 		outputLine += str(lineCount)+'\n'
