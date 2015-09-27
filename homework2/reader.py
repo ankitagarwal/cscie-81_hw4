@@ -8,31 +8,108 @@ import scipy as sp
 from scipy.stats import f
 
 
-conversions = {'a':0, 'b':1, 'c':2, 'd':3,'e':4}
-window = 5
+window = 10
 baselineSize = 50
 #Currently using the standard .05 alpha level, which gives us a
 #high degree of confidence that a change is valid
 #We are dividing by 2 for the two tailed test
 confidence = .95
-alphaVar = (1-confidence) / 2
+alpha = (1-confidence) / 2
   
+conversions = {'a':1, 'b':2, 'c':3, 'd':4, 'e':5}
 
 
+def isnumeric(var):
+	try:
+		float(var)
+		return True
+	except:
+		return False
+
+#Testing purposes only
+def numericGet(fileObj):
+	global conversions
+	line = fileObj.readline().strip()
+	if line in conversions:
+		return conversions[line]
+	return line
 
 #This cleaning function strips out any extra whitespace, 
 #converts any letters to numbers (see paper for explanation),
 #and converts all string objects to floats for calculation
 def safeGet(fileObj):
 	line = fileObj.readline().strip()
-	if line == "":
-		return line
-	global conversions
-	if line in conversions:
-		line = conversions[line]
-	return float(line)
+	return line
 
 
+#Builds an array of of character frequencies found in the charArray given,
+#or in the "incudeArray" (which may not be present in charArray)
+def buildFrequencies(charArray, includeArr=[]):
+	freq = []
+	if 'a' in charArray+includeArr:
+		freq.append(charArray.count('a'))
+	if 'b' in charArray+includeArr:
+		freq.append(charArray.count('b'))
+	if 'c' in charArray+includeArr:
+		freq.append(charArray.count('c'))
+	if 'd' in charArray+includeArr:
+		freq.append(charArray.count('d'))
+
+	return freq
+
+#Perform a chi square test with a set of buffer frequencies, 
+#and baseline frequencies
+def chiSquareTest(bufferVals, baselineVals):
+	pValue = sp.stats.chi2.ppf(confidence, window-1)
+	chiSquared = sp.stats.chi2_contingency(np.array([bufferVals['freq'], baselineVals['freq']]))[0]
+	if chiSquared > pValue:
+		print("Chi square frequency change detected! p-value: "+str(pValue)+" chiSquared: "+str(chiSquared))
+		return True
+	return False
+
+
+def meanVarianceTest(bufferVals, baselineVals):
+	global window
+	global alpha
+	global baselineSize
+	
+	#VARIANCE TEST
+	#A variance of 0 means we can't perform the F-test
+	if bufferVals['var'] != 0:
+		#variance has increased
+		if(bufferVals['var'] > bufferVals['var']):
+			pValue = sp.stats.f.sf((bufferVals['var'] / baselineVals['var']), window - 1, baselineSize - 1)
+		#variance has decreased
+		else:
+			pValue = sp.stats.f.sf((baselineVals['var'] / bufferVals['var']), baselineSize - 1, window - 1)
+		if  pValue < alpha:
+			print("Variance ", end="")
+			print("Variance has changed")
+			return True
+
+
+	#MEAN TEST
+
+	#This should be a very rare case, but I want to try and handle it in a sensical-ish way
+	if bufferVals['stdDev'] == 0:
+		print("Standard deviation of samples is 0!")
+		confidence = sp.stats.t.ppf(alpha/2, 9)
+		if np.absolute(baselineVals['mean'] - bufferVals['mean']) < ((baselineVals['stdDev']/sp.sqrt(bufferSize))*confidence):
+			return True
+		else:
+			return False
+
+	#Perform a t test of the small number of samples (We're assuming the window is <30, 
+	#However, this will still work for larger windows. To determine if the mean is within
+	#Acceptable parameters
+	tStat = (baselineVals['mean']-bufferVals['mean'])/(bufferVals['stdDev']/sp.sqrt(window))
+	#This will be the low half of the confidence interval, e.g. -2.262 for 95%
+	confidence = sp.stats.t.ppf(alpha/2, 9)
+	if tStat < confidence or tStat > -confidence:
+		print("Baseline changed")
+		return True
+	else:
+		return False
 
 #Takes as arguments a file object and a dict of 
 #baseline measurements (std deviation, mean, see usage below)
@@ -47,98 +124,26 @@ def safeGet(fileObj):
 #file has been reached or not
 def getWindow(fileCon, measurements):
 	global window
-	global alphaVar
-	global baselineSize
 	
 	buffered = []
 	for i in range(window):
 		line = safeGet(fileCon)
 		if line == "":
-			raise EOFError("No samples, or too few samples in file")
+			raise EOFError("No samples, or too few samples remaining in file")
 		buffered.append(line)
-	windowMeas = {'stdDev':np.std(buffered), 'mean':np.mean(buffered), 'var':np.var(buffered), 'sem':sp.stats.sem(buffered, ddof=0)}
-	pValue = 0.0
-	
-	#A variance of 0 means we can't perform the F-test
-	if(windowMeas['var'] != 0):
-		#variance has increased
-		if(windowMeas['var'] > measurements['var']):
-			pValue = sp.stats.f.sf((windowMeas['var'] / measurements['var']), window - 1, baselineSize - 1)
-		#variance has decreased
-		else:
-			pValue = sp.stats.f.sf((measurements['var'] / windowMeas['var']), baselineSize - 1, window - 1)
-		if  pValue < alphaVar:
-			print("Variance ", end="")
-			return True
-
-
-	#Calculate confidence in the mean
-	stdErrDiff = sp.sqrt(windowMeas['sem']**2+measurements['sem']**2)
-	meanInterval = sp.stats.norm.interval(confidence)*stdErrDiff
-	print(meanInterval)
-	
-
-#	else:
-		#in the end this should be removed, but right now it could help tell
-		#us how big the window should be. The larger the window the less likely
-		#it is that we will happen to get an buffered of all 1 number. 
-#		print("The variance of this window is 0")
-
-	#Calculate cumulative probability density
-	#Now that we have the necessary data measurements, we can compare them
-	if windowMeas['stdDev'] > measurements['stdDev']*1.2:
-		print("Mean ", end="")
-		return True
-
-
-#This is an attempt to narrow down where the variance changes.
-#It is not very precise, but the forums said we just needed to estimate the 
-#location of the line for variance. 
-#the mean argument should always = np.mean(buffered) 
-#It is a recursive creation that takes the line that getWindow's fileCon (line) is
-#beginning on, the buffered array thing (divideThis), and weather the variance has increased
-#or decreased (varianceUp) as its arguments. line = int, divideThis = [], and 
-#varianceUp = boolean. The idea is to divide the divideThis in half and take half
-#with the larger (if varianceUp = True) or the smaller (if varianceUp = False)
-#variance and keep on dividing until we reach a point where we can't divide up
-#any more  	
-def getLine(divideThis, line, varianceUp, mean):
-	divideThis1 = []
-	divideThis2 = []
-	for i in range(lent(divideThis)):
-		if (i <= len(divideThis)):
-			divideThis1.append(divideThis[i])
-		else:
-			divideThis2.append(divideThis[i])
-		
-	if len(divideThis) <= 2:
-		var1 = (divideThis1[0] - mean) ^ 2
-		var2 = (divideThis2[0] - mean) ^ 2
-		#the variance has increased 
-		if varianceUp:
-			if var1 > var2:
-				return line
-			else:
-				return line + 1
-		#varianceUp is false so we want the line that the lower variance is on
-		else:
-			if var1 < var2:
-				return line
-			else:
-				return line + 1
-	#find which half is higher
-	if varianceUp:		
-		if np.var(divideThis1) > np.var(divideThis2):
-			getLine(divideThis1, line, varianceUp, mean)
-		else:
-			getLine(divideThis2, line + len(divideThis1) - 1, varianceUp, mean)
-	#Or find which half is lower
+	if isnumeric(buffered[0]):
+		buffered = [float(x) for x in buffered]
+		bufferMeasurements = {'stdDev':np.std(buffered), 'mean':np.mean(buffered), 'var':np.var(buffered)}
+		return meanVarianceTest(bufferMeasurements, measurements)
 	else:
-		if np.var(divideThis1) < np.var(divideThis2):
-			getLine(divideThis1, line, varianceUp, mean)
-		else:
-			getLine(divideThis2, line + lent(divideThis1) - 1, varianceUp, mean)
+		frequencies = buildFrequencies(buffered, measurements['chars'])
+		#There is a new character encountered -- not only is this a change, but we cannot
+		#do a chi square test with 0 expected samples for that character, because of divide by zero errors
+		if len(frequencies) > len(measurements['freq']):
+			return False
+		bufferMeasurements = {'freq':frequencies}
 		
+		return chiSquareTest(bufferMeasurements, measurements)
 
 
 directory = argv[1]
@@ -149,19 +154,20 @@ output.truncate()
 files = [ f for f in listdir(directory) if isfile(join(directory,f)) ]
 #Get each file in the provided directory
 for txtFile in files:
+	print("---------------------")
 	print(txtFile)
 	outputLine = txtFile+'\t'
-	#TESTING
+	########TESTING
 	fileCon = open(directory+'/'+txtFile, 'r')
 	allData = []
-	line = safeGet(fileCon)
+	line = numericGet(fileCon)
 	while line != "":
 		allData.append(line)
-		line = safeGet(fileCon)
+		line = numericGet(fileCon)
 	plt.plot(allData)
-	plt.show()
+	#plt.show()
 	fileCon.close()
-	#TESTING
+	#########TESTING
 
 	fileCon = open(directory+'/'+txtFile, 'r')
 	baseline = []
@@ -171,9 +177,18 @@ for txtFile in files:
 		line = safeGet(fileCon)
 		baseline.append(line)
 
-	#added variance to measurements
-	measurements = {'mean':np.mean(baseline), 'stdDev':np.std(baseline), 'var':np.var(baseline), 'sem':sp.stats.sem(baseline, ddof=0)}
-	
+	if isnumeric(baseline[0]):
+		#Numeric values. Will do mean and variance test
+		baseline = [float(x) for x in baseline]
+		measurements = {'mean':np.mean(baseline), 'stdDev':np.std(baseline), 'var':np.var(baseline)}
+	else:
+		#alphanumeric baseline. Will do chi square test
+		#Get the frequencies of each character to calculate observed and exepected values later
+		#Also, get a unique set of all chars in the list, so we can make sure to grab "0 occurences"
+		#for characters we may not see in every window
+		measurements = {'freq':buildFrequencies(baseline), 'chars':list(set(baseline))}
+
+
 	#scale = measurements['stdDev']/sp.sqrt(baselineSize)
 	#interval = stats.norm.interval(confidence, loc=measurements['mean'], scale=scale)
 	#measurements.append['interval':interval]
