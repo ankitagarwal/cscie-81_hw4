@@ -11,11 +11,11 @@ from scipy.stats import f
 window = 5
 baselineSize = 50
 chiBuffer = []
-chiBufferScale = 4
+chiBufferScale = 3
 #Currently using the standard .05 alpha level, which gives us a
 #high degree of confidence that a change is valid
 #We are dividing by 2 for the two tailed test
-confidence = .97
+confidence = .95
 alpha = (1-confidence) / 2
   
 conversions = {'a':1, 'b':2, 'c':3, 'd':4, 'e':5}
@@ -62,10 +62,14 @@ def buildFrequencies(charArray, includeArr=[]):
 #Perform a chi square test with a set of buffer frequencies, 
 #and baseline frequencies
 def chiSquareTest(bufferVals, baselineVals):
-	pValue = sp.stats.chi2.ppf(confidence, window-1)
-	chiSquared = sp.stats.chisquare(bufferVals['freq'], baselineVals['freq'], ddof=window-1)[1]
-	if chiSquared > pValue:
-		print("Chi square frequency change detected! p-value: "+str(pValue)+" chiSquared: "+str(chiSquared))
+	print(bufferVals)
+	print(baselineVals)
+	pValue = sp.stats.chisquare(bufferVals['freq'], baselineVals['freq'])[1]
+
+	print("pValue:")
+	print(pValue)
+	if pValue > (1-confidence):
+		print("Chi square frequency change detected! p-value: "+str(pValue)+" Confidence: "+str(1-confidence))
 		return True
 	return False
 
