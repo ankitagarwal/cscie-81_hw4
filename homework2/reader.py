@@ -1,4 +1,4 @@
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 from sys import argv
 from os import listdir, remove
 from os.path import isfile, join
@@ -8,12 +8,14 @@ import scipy as sp
 from scipy.stats import f
 
 
-window = 10
+window = 5
 baselineSize = 50
+chiBuffer = []
+chiBufferScale = 4
 #Currently using the standard .05 alpha level, which gives us a
 #high degree of confidence that a change is valid
 #We are dividing by 2 for the two tailed test
-confidence = .95
+confidence = .97
 alpha = (1-confidence) / 2
   
 conversions = {'a':1, 'b':2, 'c':3, 'd':4, 'e':5}
@@ -61,7 +63,7 @@ def buildFrequencies(charArray, includeArr=[]):
 #and baseline frequencies
 def chiSquareTest(bufferVals, baselineVals):
 	pValue = sp.stats.chi2.ppf(confidence, window-1)
-	chiSquared = sp.stats.chi2_contingency(np.array([bufferVals['freq'], baselineVals['freq']]))[0]
+	chiSquared = sp.stats.chisquare(bufferVals['freq'], baselineVals['freq'], ddof=window-1)[1]
 	if chiSquared > pValue:
 		print("Chi square frequency change detected! p-value: "+str(pValue)+" chiSquared: "+str(chiSquared))
 		return True
@@ -93,7 +95,7 @@ def meanVarianceTest(bufferVals, baselineVals):
 	#This should be a very rare case, but I want to try and handle it in a sensical-ish way
 	if bufferVals['stdDev'] == 0:
 		print("Standard deviation of samples is 0!")
-		confidence = sp.stats.t.ppf(alpha/2, 9)
+		confidence = sp.stats.t.ppf(alpha, 9)
 		if np.absolute(baselineVals['mean'] - bufferVals['mean']) < ((baselineVals['stdDev']/sp.sqrt(bufferSize))*confidence):
 			return True
 		else:
@@ -104,7 +106,7 @@ def meanVarianceTest(bufferVals, baselineVals):
 	#Acceptable parameters
 	tStat = (baselineVals['mean']-bufferVals['mean'])/(bufferVals['stdDev']/sp.sqrt(window))
 	#This will be the low half of the confidence interval, e.g. -2.262 for 95%
-	confidence = sp.stats.t.ppf(alpha/2, 9)
+	confidence = sp.stats.t.ppf(alpha, 9)
 	if tStat < confidence or tStat > -confidence:
 		print("Baseline changed")
 		return True
@@ -124,6 +126,7 @@ def meanVarianceTest(bufferVals, baselineVals):
 #file has been reached or not
 def getWindow(fileCon, measurements):
 	global window
+	global chiBuffer 
 	
 	buffered = []
 	for i in range(window):
@@ -136,7 +139,10 @@ def getWindow(fileCon, measurements):
 		bufferMeasurements = {'stdDev':np.std(buffered), 'mean':np.mean(buffered), 'var':np.var(buffered)}
 		return meanVarianceTest(bufferMeasurements, measurements)
 	else:
-		frequencies = buildFrequencies(buffered, measurements['chars'])
+		if len(chiBuffer) <= window*chiBufferScale:
+			chiBuffer = chiBuffer[window:]
+		chiBuffer = chiBuffer + buffered
+		frequencies = buildFrequencies(chiBuffer, measurements['chars'])
 		#There is a new character encountered -- not only is this a change, but we cannot
 		#do a chi square test with 0 expected samples for that character, because of divide by zero errors
 		if len(frequencies) > len(measurements['freq']):
@@ -152,21 +158,23 @@ if isfile('output.txt'):
 output = open('output.txt', 'a')
 output.truncate()
 files = [ f for f in listdir(directory) if isfile(join(directory,f)) ]
+files = sorted(files)
 #Get each file in the provided directory
 for txtFile in files:
 	print("---------------------")
 	print(txtFile)
 	outputLine = txtFile+'\t'
+	chiBuffer = []
 	########TESTING
-	fileCon = open(directory+'/'+txtFile, 'r')
-	allData = []
-	line = numericGet(fileCon)
-	while line != "":
-		allData.append(line)
-		line = numericGet(fileCon)
-	plt.plot(allData)
+	#fileCon = open(directory+'/'+txtFile, 'r')
+	#allData = []
+	#line = numericGet(fileCon)
+	#while line != "":
+	#	allData.append(line)
+	#	line = numericGet(fileCon)
+	#plt.plot(allData)
 	#plt.show()
-	fileCon.close()
+	#fileCon.close()
 	#########TESTING
 
 	fileCon = open(directory+'/'+txtFile, 'r')
@@ -186,8 +194,9 @@ for txtFile in files:
 		#Get the frequencies of each character to calculate observed and exepected values later
 		#Also, get a unique set of all chars in the list, so we can make sure to grab "0 occurences"
 		#for characters we may not see in every window
+		chiBuffer = baseline[window*chiBufferScale:]
 		measurements = {'freq':buildFrequencies(baseline), 'chars':list(set(baseline))}
-
+	
 
 	#scale = measurements['stdDev']/sp.sqrt(baselineSize)
 	#interval = stats.norm.interval(confidence, loc=measurements['mean'], scale=scale)
