@@ -9,21 +9,21 @@ from scipy.stats import f
 
 #The size of our comparison sample as we move for the file. Note, 
 #the chiBuffer is used for chi square test to improve accuracy
-window = 5
+window = 10
 #This is used to store the last few (currently 20) buffered
 #samples, in an effort to create a more effective chi square test
 #With so few samples, we were getting odd results. This is used
 #only for the chi square test
 chiBuffer = []
 #How many times larger the chi buffer is than the window is
-chiBufferScale = 4
+chiBufferScale = 2
 
 #How many samples act as our inititial baseline
 baselineSize = 50
 #Currently using the standard .05 alpha level, which gives us a
 #high degree of confidence that a change is valid
 #We are dividing by 2 for the two tailed test
-confidence = .95
+confidence = .97
 alpha = (1-confidence) / 2
   
 conversions = {'a':1, 'b':2, 'c':3, 'd':4, 'e':5}
@@ -36,7 +36,8 @@ def isnumeric(var):
 	except:
 		return False
 
-#Testing purposes only
+#Used for testing purposes, in order to draw the alphabetical characters
+#as numbers on the plot
 def numericGet(fileObj):
 	global conversions
 	line = fileObj.readline().strip()
@@ -71,8 +72,7 @@ def buildFrequencies(charArray, includeArr=[]):
 #and baseline frequencies
 def chiSquareTest(bufferVals, baselineVals):
 	pVal = sp.stats.chi2_contingency(np.array([bufferVals['freq'], baselineVals['freq']]))[1]
-
-	if pVal < alpha:
+	if pVal < alpha*2:
 		print("Buffer values:")
 		print(bufferVals)
 		print("Baseline values:")
@@ -103,11 +103,11 @@ def meanVarianceTest(bufferVals, baselineVals):
 
 
 	#MEAN TEST
-
+	confidence = sp.stats.t.ppf(alpha, window-1)
+	print(confidence)
 	#This should be a very rare case, but I want to try and handle it in a sensical-ish way
 	if bufferVals['stdDev'] == 0:
 		print("Standard deviation of samples is 0!")
-		confidence = sp.stats.t.ppf(alpha, 9)
 		if np.absolute(baselineVals['mean'] - bufferVals['mean']) < ((baselineVals['stdDev']/sp.sqrt(bufferSize))*confidence):
 			return True
 		else:
@@ -116,9 +116,12 @@ def meanVarianceTest(bufferVals, baselineVals):
 	#Perform a t test of the small number of samples (We're assuming the window is <30, 
 	#However, this will still work for larger windows. To determine if the mean is within
 	#Acceptable parameters
-	tStat = (baselineVals['mean']-bufferVals['mean'])/(bufferVals['stdDev']/sp.sqrt(window))
+	tStat = (baselineVals['mean']-bufferVals['mean'])/np.sqrt((bufferVals['var']/window)+(baselineVals['var']/baselineSize))
+	print("Tstat is: "+str(tStat))
+	print("Confidence is: ")
+
+	#tStat = (baselineVals['mean']-bufferVals['mean'])/(bufferVals['stdDev']/sp.sqrt(window))
 	#This will be the low half of the confidence interval, e.g. -2.262 for 95%
-	confidence = sp.stats.t.ppf(alpha, 9)
 	if tStat < confidence or tStat > -confidence:
 		print("Baseline changed")
 		return True
@@ -153,7 +156,7 @@ def getWindow(fileCon, measurements):
 	else:
 		#If the chiBuffer is getting long, remove the oldest samples,
 		#then add the new samples to the buffer. Build frequency tables using this buffer
-		if len(chiBuffer) >= 4*window:
+		if len(chiBuffer) >= chiBufferScale*window:
 			chiBuffer = chiBuffer[window:]
 		chiBuffer = chiBuffer+buffered
 		frequencies = buildFrequencies(chiBuffer, measurements['chars'])
@@ -209,9 +212,8 @@ for txtFile in files:
 		#Get the frequencies of each character to calculate observed and exepected values later
 		#Also, get a unique set of all chars in the list, so we can make sure to grab "0 occurences"
 		#for characters we may not see in every window
-		chiBuffer = baseline[window*4:]
+		chiBuffer = baseline[:window*chiBufferScale]
 		measurements = {'freq':buildFrequencies(baseline), 'chars':list(set(baseline))}
-
 	lineCount = baselineSize
 	try:
 		while not getWindow(fileCon, measurements):
