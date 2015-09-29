@@ -5,17 +5,17 @@ from os.path import isfile, join
 import numbers
 import numpy as np
 import scipy as sp
+import scipy.stats
 
 
-
-window = 5
+window = 10
 baselineSize = 50
 chiBuffer = []
 chiBufferScale = 3
 #Currently using the standard .05 alpha level, which gives us a
 #high degree of confidence that a change is valid
 #We are dividing by 2 for the two tailed test
-confidence = .95
+confidence = .98
 alpha = (1-confidence) / 2
   
 conversions = {'a':1, 'b':2, 'c':3, 'd':4, 'e':5}
@@ -65,36 +65,13 @@ def chiSquareTest(bufferVals, baselineVals):
 	global window
 	global baselineSize
 # 	print(bufferVals['freq'])
-	pValue = sp.stats.mstats.chisquare(baselineVals['freq'],bufferVals['freq'])[1]
+	pValue = sp.stats.chisquare(bufferVals['freq'],baselineVals['freq'])[1]
+
 	print(pValue)
-# 	ratio = window / baselineSize
-# 	expectedBuffVals =[]
-# 	expectedBaseVals = []
-# 	
-# 	
-# 	for i in range(len(bufferVals['freq'])):
-# 		b = bufferVals['freq'][i] + baselineVals['freq'][i]		
-# 		expectedBuffVals.append(b * ratio)
-# 		expectedBaseVals.append(b * (1 - ratio))
-# 	chi = 0
-# 	for i in range(len(bufferVals['freq'])):
-# 		chi += (bufferVals['freq'][i] - expectedBuffVals[i])**2/ expectedBuffVals[i]
-# 		chi += (baselineVals['freq'][i] - expectedBaseVals[i])**2/ expectedBaseVals[i]	
-# 	print (chi)
-# 	print (pValue)
-	
-# 	chi2,p  = sp.stats.chisquare(np.array([bufferVals['freq'], baselineVals['freq']]), f_exp = np.array([expectedBuffVals, expectedBaseVals]))
-# 	print(p)
-# 	print (chi2)
-	
-	
-# 	print(bufferVals['freq'])
-# 	pValue = sp.stats.chi2.ppf(confidence, window-1)
-# 	print(pValue)
-	#chiSquared = sp.stats.chi2_contingency(np.array([bufferVals['freq'], baselineVals['freq']]))[0]
-# 	chiSquared2 = sp.stats.chi2_contingency(np.array([bufferVals['freq'], baselineVals['freq']]))[3]
-# 	print(chiSquared2)
+
 	if pValue < (1-confidence):
+		print(bufferVals['freq'])
+		print(baselineVals['freq'])
 		print("Chi square frequency change detected! p-value: "+str(pValue))
 		return True
 	return False
