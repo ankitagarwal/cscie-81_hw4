@@ -1,21 +1,21 @@
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from sys import argv
 from os import listdir, remove
 from os.path import isfile, join
 import numbers
 import numpy as np
 import scipy as sp
-import scipy.stats
+from scipy.stats import f
 
 
-window = 10
+window = 15
 baselineSize = 50
 chiBuffer = []
-chiBufferScale = 3
+chiBufferScale = 2
 #Currently using the standard .05 alpha level, which gives us a
 #high degree of confidence that a change is valid
 #We are dividing by 2 for the two tailed test
-confidence = .98
+confidence = .95
 alpha = (1-confidence) / 2
   
 conversions = {'a':1, 'b':2, 'c':3, 'd':4, 'e':5}
@@ -61,18 +61,28 @@ def buildFrequencies(charArray, includeArr=[]):
 
 #Perform a chi square test with a set of buffer frequencies, 
 #and baseline frequencies
+#We were struggling with some of the built-in scipy chi tests, so 
+#these calculation are done "by hand"
 def chiSquareTest(bufferVals, baselineVals):
 	global window
 	global baselineSize
-# 	print(bufferVals['freq'])
-	pValue = sp.stats.chisquare(bufferVals['freq'],baselineVals['freq'])[1]
+	pValue = sp.stats.chi2.ppf(confidence +.03, ((len(bufferVals['freq'])- 1) * (len(baselineVals['freq']) - 1)))
+	ratio = window / baselineSize
+	expectedBuffVals =[]
+	expectedBaseVals = []
+	
+	
+	for i in range(len(bufferVals['freq'])):
+		b = bufferVals['freq'][i] + baselineVals['freq'][i]		
+		expectedBuffVals.append(b * ratio)
+		expectedBaseVals.append(b * (1 - ratio))
+	chiSquared = 0
+	for i in range(len(bufferVals['freq'])):
+		chiSquared += (bufferVals['freq'][i] - expectedBuffVals[i])**2/ expectedBuffVals[i]
+		chiSquared += (baselineVals['freq'][i] - expectedBaseVals[i])**2/ expectedBaseVals[i]	
 
-	print(pValue)
-
-	if pValue < (1-confidence):
-		print(bufferVals['freq'])
-		print(baselineVals['freq'])
-		print("Chi square frequency change detected! p-value: "+str(pValue))
+	if chiSquared > pValue:
+		print("Chi square frequency change detected! p-value: "+str(pValue)+" chiSquared: "+str(chiSquared))
 		return True
 	return False
 
@@ -97,7 +107,7 @@ def meanVarianceTest(bufferVals, baselineVals):
 	#Acceptable parameters
 	tStat = (baselineVals['mean']-bufferVals['mean'])/(bufferVals['stdDev']/sp.sqrt(window))
 	#This will be the low half of the confidence interval, e.g. -2.262 for 95%
-	confidence = sp.stats.t.ppf(alpha, 9)
+	confidence = sp.stats.t.ppf(alpha, window - 1)
 	if tStat < confidence or tStat > -confidence:
 		print("Baseline changed")
 		return True
@@ -107,11 +117,10 @@ def meanVarianceTest(bufferVals, baselineVals):
 	#A variance of 0 means we can't perform the F-test
 	if(baselineVals['var'] != 0):
 		FValue = bufferVals['var'] / baselineVals['var']
-		pValue = sp.stats.f.cdf(FValue, window - 1, baselineSize - 1)
-		print(FValue)
-		print(pValue)
+		upperVal = sp.stats.f.isf(alpha, window - 1, baselineSize - 1)
+		lowerVal = sp.stats.f.ppf(alpha, window - 1, baselineSize - 1)
 		
-		if  pValue > (1-confidence):
+		if  FValue < lowerVal or FValue > upperVal:
 			print("Variance ", end = "")
 			return True
 # 	In the unlikely case that the baseline variance is 0 that means finding any 
@@ -120,12 +129,10 @@ def meanVarianceTest(bufferVals, baselineVals):
 		if bufferVals['var'] > 0:
 			print("Variance ", end = "")
 			return True 
-		
-	return False
-	
-	
-	
 
+	return False
+		
+	
 	
 #Takes as arguments a file object and a dict of 
 #baseline measurements (std deviation, mean, see usage below)
@@ -179,6 +186,7 @@ for txtFile in files:
 	print(txtFile)
 	outputLine = txtFile+'\t'
 	chiBuffer = []
+	#UNCOMMENT THIS TO SEE PLOTS DISPLAYED
 	########TESTING
 	#fileCon = open(directory+'/'+txtFile, 'r')
 	#allData = []
@@ -211,14 +219,9 @@ for txtFile in files:
 		chiBuffer = baseline[window*chiBufferScale:]
 		measurements = {'freq':buildFrequencies(baseline), 'chars':list(set(baseline))}
 	
-
-	#scale = measurements['stdDev']/sp.sqrt(baselineSize)
-	#interval = stats.norm.interval(confidence, loc=measurements['mean'], scale=scale)
-	#measurements.append['interval':interval]
 	lineCount = baselineSize
 	try:
 		while not getWindow(fileCon, measurements):
-			print(lineCount)
 			lineCount += window
 		print("change found on line "+str(lineCount))
 		outputLine += str(lineCount)+'\n'
