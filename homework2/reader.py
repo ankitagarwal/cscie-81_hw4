@@ -5,10 +5,10 @@ from os.path import isfile, join
 import numbers
 import numpy as np
 import scipy as sp
-from scipy.stats import f
 
 
-window = 15
+
+window = 5
 baselineSize = 50
 chiBuffer = []
 chiBufferScale = 3
@@ -65,7 +65,8 @@ def chiSquareTest(bufferVals, baselineVals):
 	global window
 	global baselineSize
 # 	print(bufferVals['freq'])
-	pValue = sp.stats.chi2.ppf(confidence , ((len(bufferVals['freq'])- 1) * (len(baselineVals['freq']) - 1)))
+	pValue = sp.stats.mstats.chisquare(baselineVals['freq'],bufferVals['freq'])[1]
+	print(pValue)
 # 	ratio = window / baselineSize
 # 	expectedBuffVals =[]
 # 	expectedBaseVals = []
@@ -90,11 +91,11 @@ def chiSquareTest(bufferVals, baselineVals):
 # 	print(bufferVals['freq'])
 # 	pValue = sp.stats.chi2.ppf(confidence, window-1)
 # 	print(pValue)
-	chiSquared = sp.stats.chi2_contingency(np.array([bufferVals['freq'], baselineVals['freq']]))[0]
+	#chiSquared = sp.stats.chi2_contingency(np.array([bufferVals['freq'], baselineVals['freq']]))[0]
 # 	chiSquared2 = sp.stats.chi2_contingency(np.array([bufferVals['freq'], baselineVals['freq']]))[3]
 # 	print(chiSquared2)
-	if chiSquared > pValue:
-		print("Chi square frequency change detected! p-value: "+str(pValue)+" chiSquared: "+str(chiSquared))
+	if pValue < (1-confidence):
+		print("Chi square frequency change detected! p-value: "+str(pValue))
 		return True
 	return False
 
@@ -129,13 +130,11 @@ def meanVarianceTest(bufferVals, baselineVals):
 	#A variance of 0 means we can't perform the F-test
 	if(baselineVals['var'] != 0):
 		FValue = bufferVals['var'] / baselineVals['var']
-		upperVal = sp.stats.f.isf(alpha, window - 1, baselineSize - 1)
-		lowerVal = sp.stats.f.ppf(alpha, window - 1, baselineSize - 1)
+		pValue = sp.stats.f.cdf(FValue, window - 1, baselineSize - 1)
 		print(FValue)
-		print(upperVal)
-		print(lowerVal)
+		print(pValue)
 		
-		if  FValue < lowerVal or FValue > upperVal:
+		if  pValue > (1-confidence):
 			print("Variance ", end = "")
 			return True
 # 	In the unlikely case that the baseline variance is 0 that means finding any 
@@ -242,6 +241,7 @@ for txtFile in files:
 	lineCount = baselineSize
 	try:
 		while not getWindow(fileCon, measurements):
+			print(lineCount)
 			lineCount += window
 		print("change found on line "+str(lineCount))
 		outputLine += str(lineCount)+'\n'
