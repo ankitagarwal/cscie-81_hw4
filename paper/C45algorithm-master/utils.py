@@ -1,12 +1,35 @@
 import csv
+import itertools
+import sys
+from itertools import zip_longest
 
+def transpose(filename):
+    with open(filename, 'r') as csvfile:
+        # Read all Tab-delimited rows from stdin.
+        tsv_reader = csv.reader(csvfile, delimiter=',')
+        all_data = list(tsv_reader)
 
-def importCsv(filename, pivot=False):
-    a = zip(*csv.reader(open(filename, "r").read()))
-    output = open("output.csv", "wb")
-    csv.writer(output).writerows(a)
-    output.close()
-    print(a)
+        # Transpose it.
+        all_data = list(zip_longest(*all_data, fillvalue=''))
+
+    parts = ','.split(filename)
+    newFilename = parts[0]+"T.csv"
+    with open(newFilename, 'w') as output:
+        # Write it back out.
+        tsv_writer = csv.writer(output, delimiter=',')
+        for row in all_data:
+            tsv_writer.writerow(row) 
+    return newFilename
+
+def importCsv(filename, transposeBool):
+    if transpose:
+        filename = transpose(filename)
+    data={}
+    with open(filename) as fin:
+        reader=csv.reader(fin)
+        for row in reader:
+            data[row[0]]=row[1:]
+    return data       
 
 
 def deldup(li):
