@@ -42,9 +42,6 @@ def validate_table(table):
         for i in v: assert i
 
 
-importCsv("kr_vs_kp.csv", True)
-#table = json.loads(open('table.json').read())
-#print(table)
-#tree = mine_c45(table, 'result')
-#print("Printing tree!")
-#print_list_tree(tree)
+table = importCsv("data/winequality-red.csv", transposeBool=True)
+tree = mine_c45(table, 'class')
+print_list_tree(tree)
