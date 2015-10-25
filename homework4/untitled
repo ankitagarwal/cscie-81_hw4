@@ -1,0 +1,6 @@
+class Character:
+
+   def __init__(self, id, playId, name):
+      self.id = id
+      self.playId = playId
+      self.name = name
