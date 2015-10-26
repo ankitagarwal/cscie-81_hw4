@@ -1,1 +1,0 @@
-Group assignments for CSCI E-81, Machine Learning
