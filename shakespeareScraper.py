@@ -149,6 +149,7 @@ class ShakespeareScraper:
 		except:
 			conn.rollback()
 
+
 	#There's probably a better way to do this, but, if a 
 	#character exists in a list (by name), return it
 	#If not, return None (used by getScene for caching)
@@ -182,7 +183,7 @@ class ShakespeareScraper:
 			self.storeLine(line)
 
 
-	def getPlay(self, playLink, playType):
+	def scrapePlay(self, playLink, playType):
 		title = self.strip(playLink.get_text())
 		print("PLAY: "+str(title)+" a "+playType)
 		play = Play(None, title, playType)
@@ -199,7 +200,21 @@ class ShakespeareScraper:
 			scene = Scene(None, play, urlSplit[1], urlSplit[2])
 			self.getScene(url, scene)
 		
-
+	def sonnetScraper(self):
+		home = self.getPage("http://shakespeare.mit.edu/Poetry/sonnets.html")
+		sonnets = home.dl.findAll("dt")
+		play = Play(38, "Sonnets", "Poetry", "POETRY")
+		character = Character(1337, play, "SONNETS")
+		i = 1
+		for sonnetListing in sonnets:
+			url = "http://shakespeare.mit.edu/Poetry/"+sonnetListing.a.attrs['href']
+			page = self.getPage(url)
+			print(page.h1.get_text())
+			scene = Scene(None, play, 1, i, page.h1.get_text())
+			self.storeScene(scene)
+			line = Line(None, scene, character, page.blockquote.get_text())
+			sonnet = self.storeLine(line)
+			i = i+1
 
 	def getPlays(self):
 		home = self.getPage("http://shakespeare.mit.edu/")
@@ -222,10 +237,11 @@ class ShakespeareScraper:
 			self.getPlay(tragedy, "TRAGEDY")
 
 		#for poem in poetry:
-			#self.getPlay(poem, "POEM")
+		#	self.getPlay(poem, "POEM")
 
 
 crawler = ShakespeareScraper()
 crawler.openCon()
-crawler.getPlays()
+crawler.sonnetScraper()
+#crawler.getPlays()
 crawler.closeCon()
