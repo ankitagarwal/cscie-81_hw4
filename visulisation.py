@@ -20,6 +20,8 @@ def openCon():
     cur.execute("USE shakespeare")
 
 openCon()
+
+# Raw data plot
 cur.execute("Select * from features_scenes")
 X = []
 for row in cur:
@@ -34,7 +36,25 @@ print(X_proj)
 first = X_proj.T[0].T
 second = X_proj.T[1].T
 plt.scatter(first, second, marker='o')
-plt.title("Raw data (scenes) with dimensions reduced to 2 using PCA")
+plt.title("Raw data (scenes with punctuations) with dimensions reduced to 2 using PCA")
+plt.show()
+
+# Cleaned Raw data plot
+cur.execute("Select * from features_scenes_cleaned")
+X_cleaned = []
+for row in cur:
+    X_cleaned.append(row)
+X_cleaned = pd.DataFrame(X_cleaned)
+X_cleaned.drop('id', 1)
+X_cleaned.drop('sceneId', 1)
+pca = PCA(2)
+pca.fit(X_cleaned)
+X_cleaned_proj = pca.transform(X_cleaned)
+print(X_cleaned_proj)
+first = X_cleaned_proj.T[0].T
+second = X_cleaned_proj.T[1].T
+plt.scatter(first, second, marker='o')
+plt.title("Raw data (scenes  without punctuations) with dimensions reduced to 2 using PCA")
 plt.show()
 
 # Let us do K-means now.
@@ -43,9 +63,8 @@ km.fit(X)
 labels = km.predict(X)
 colors = ['#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF']
 label_color = [colors[l] for l in labels]
-centroids = km.cluster_centers_
 plt.scatter(first, second, c=label_color)
-plt.title('K-means clustered data with dimensions reduced to 2 using PCA')
+plt.title('K-means clustered data with dimensions reduced to 2 using PCA (scenes  with punctuations)')
 plt.show()
 
 # GMM, here I come.
@@ -56,4 +75,26 @@ labels = mix.predict(X)
 label_color = [colors[l] for l in labels]
 ax = plt.gca()
 ax.scatter(first, second, c=label_color, alpha=0.8)
+plt.title('GMM clustered data with dimensions reduced to 2 using PCA (scenes  with punctuations)')
+plt.show()
+
+# Let us do K-means now for data without punctuation.
+km = KMeans(n_clusters=4)
+km.fit(X_cleaned)
+labels = km.predict(X_cleaned)
+colors = ['#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF']
+label_color = [colors[l] for l in labels]
+plt.scatter(first, second, c=label_color)
+plt.title('K-means clustered data with dimensions reduced to 2 using PCA (scenes  with punctuations)')
+plt.show()
+
+# GMM, here I come for data without punctuation.
+miX_cleaned = mixture.GMM(n_components=4, covariance_type='full')
+miX_cleaned.fit(X_cleaned)
+colors = ['#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF']
+labels = miX_cleaned.predict(X_cleaned)
+label_color = [colors[l] for l in labels]
+aX_cleaned = plt.gca()
+aX_cleaned.scatter(first, second, c=label_color, alpha=0.8)
+plt.title('GMM clustered data with dimensions reduced to 2 using PCA (scenes  with punctuations)')
 plt.show()
