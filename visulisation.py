@@ -89,6 +89,7 @@ for outlier in outliers:
     plt.scatter(first[outlier[0]], second[outlier[0]], c='blue', marker='x', s=50)
 
 plt.show()
+print("Detected outliers are - (index, distance from centroid) -")
 print(outliers)
 
 # GMM, here I come.
@@ -133,6 +134,7 @@ for index, point in enumerate(X):
 for outlier in outliers:
     plt.scatter(first[outlier[0]], second[outlier[0]], c='blue', marker='x', s=50)
 plt.show()
+print("Detected outliers are - (index, distance from centroid) -")
 print(outliers)
 
 # GMM, here I come for data without punctuation.
