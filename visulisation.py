@@ -6,7 +6,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
 from sklearn import mixture
-from scipy.spatial.distance import cdist
+from sklearn.preprocessing import StandardScaler
 
 #########
 # Open a MySQL connection. Should be triggered by the caller before running
@@ -58,7 +58,7 @@ def do_kmeans(title, X, first, second, clusters = 4):
     print(outliers)
 
 
-def do_gmm(title, X, clusters = 4):
+def do_gmm(title, X, first, second, clusters = 4):
     # GMM, here I come.
     mix = mixture.GMM(n_components=clusters, covariance_type='full')
     mix.fit(X)
@@ -79,6 +79,7 @@ def prep_data(cur):
     X.drop('id', 1)
     X.drop('sceneId', 1)
     X = X.as_matrix()
+    X = StandardScaler().fit_transform(X)
     pca = PCA(2)
     pca.fit(X)
     X_proj = pca.transform(X)
@@ -113,11 +114,11 @@ do_kmeans('K-means clustered data with dimensions reduced to 2 using PCA (scenes
 
 # GMM for data with punctuation.
 do_gmm('GMM clustered data with dimensions reduced to 2 using PCA (scenes  with punctuations)\n'
-       '(3 clusters)', X, 3)
+       '(3 clusters)', X, first, second, 3)
 do_gmm('GMM clustered data with dimensions reduced to 2 using PCA (scenes  with punctuations)\n'
-       '(3 clusters)', X, 4)
+       '(3 clusters)', X, first, second, 4)
 do_gmm('GMM clustered data with dimensions reduced to 2 using PCA (scenes  with punctuations)\n'
-       '(3 clusters)', X, 5)
+       '(3 clusters)', X, first, second, 5)
 
 
 # Let us do K-means now for data without punctuation.
@@ -130,8 +131,8 @@ do_kmeans('K-means clustered data with dimensions reduced to 2 using PCA (scenes
 
 # GMM, here I come for data without punctuation.
 do_gmm('GMM clustered data with dimensions reduced to 2 using PCA (scenes  without punctuations)\n'
-       '(3 clusters)', X_cleaned, 3)
+       '(3 clusters)', X_cleaned, first, second, 3)
 do_gmm('GMM clustered data with dimensions reduced to 2 using PCA (scenes  without punctuations)\n'
-       '(3 clusters)', X_cleaned, 4)
+       '(3 clusters)', X_cleaned, first, second, 4)
 do_gmm('GMM clustered data with dimensions reduced to 2 using PCA (scenes  without punctuations)\n'
-       '(3 clusters)', X_cleaned, 5)
+       '(3 clusters)', X_cleaned, first, second, 5)
