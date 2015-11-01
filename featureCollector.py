@@ -40,51 +40,60 @@ class featureCollector:
         global cur
         conn.close()
 
-    def get_words(self):
+    def get_sentences(self, cleaned):
         global conn
         global cur
-        cur.execute("Select * from words")
+        if (cleaned):
+            cur.execute("Select * from sentences_cleaned")
+        else:
+            cur.execute("Select * from sentences")
         return cur
 
-    def get_scenes(self):
+    def get_scenes(self, cleaned):
         global conn
         global cur
         cur.execute("SET SESSION group_concat_max_len = 100000;")
-        cur.execute("Select scenes.id, COUNT(Distinct characterId) AS characterCount, GROUP_CONCAT(lineText SEPARATOR ' ') AS fullSceneText from words JOIN scenes ON words.sceneId = scenes.id GROUP BY scenes.id")
+        if (cleaned):
+            cur.execute("Select scenes.id, COUNT(Distinct characterId) AS characterCount, GROUP_CONCAT(lineText SEPARATOR ' ') AS fullSceneText from sentences_cleaned JOIN scenes ON sentences_cleaned.sceneId = scenes.id GROUP BY scenes.id")
+        else:
+            cur.execute("Select scenes.id, COUNT(Distinct characterId) AS characterCount, GROUP_CONCAT(lineText SEPARATOR ' ') AS fullSceneText from sentences JOIN scenes ON sentences.sceneId = scenes.id GROUP BY scenes.id")
         return cur
 
-    def collect_words_features(self):
-        words = self.get_words()
+    def collect_sentences_features(self, cleaned):
+        sentences = self.get_sentences(cleaned)
         all_features = []
-        for row in words:
+        for row in sentences:
             features = {}
             lineObj = Line(row['id'], row['sceneId'], row['characterId'], row['lineText'])
-            tokenizer = RegexpTokenizer(r'\w+')
-            tokens = tokenizer.tokenize(lineObj.lineText)
+            tokens = nltk.word_tokenize(row['lineText'])
             wordcounts = collections.Counter(tokens)
             features['uniquewords'] = len(wordcounts)
-            features['words'] = len(tokens)
+            features['sentences'] = len(tokens)
             features['chars'] = len(lineObj.lineText)
             features['lineid'] = lineObj.id
             for element in self.get_feature_list():
                 features[element] = wordcounts[element]
             all_features.append(features)
         for features in all_features:
-            features = self.storeLineFeature(features)
+            features = self.storeLineFeature(features, cleaned)
         return 1
 
     #Stores line features to database
-    #Note: There are tons of reserved words here, hence _count is added.
-    def storeLineFeature(self, features):
+    #Note: There are tons of reserved sentences here, hence _count is added.
+    def storeLineFeature(self, features, cleaned):
         global conn
         global cur
+        if cleaned:
+            table = 'features_sentences_cleaned'
+        else:
+            table = 'features_sentences'
         try:
-            cur.execute("INSERT INTO features_words "
+            cur.execute("INSERT INTO " + table + " "
                         "(lineId, chars_count, words_count, uniquewords_count, comma_count, dot_count, and_count,"
                         "or_count, a_count, an_count, the_count, in_count, on_count, to_count, of_count, it_count,"
                         "that_count, as_count, is_count, so_count) "
                         "VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                        (int(features['lineid']), int(features['chars']), int(features['words']), int(features['uniquewords']), int(features[',']),
+                        (int(features['lineid']), int(features['chars']), int(features['sentences']), int(features['uniquewords']), int(features[',']),
                          int(features['.']), int(features['and']), int(features['or']), int(features['a']), int(features['an']),
                          int(features['the']), int(features['in']), int(features['on']), int(features['to']),
                          int(features['of']), int(features['it']), int(features['that']), int(features['as']),
@@ -99,38 +108,41 @@ class featureCollector:
             print("ERROR: Could not store line feature")
             conn.rollback()
 
-    def collect_scene_features(self):
-        scenes = self.get_scenes()
+    def collect_scene_features(self, cleaned):
+        scenes = self.get_scenes(cleaned)
         all_features = []
         for row in scenes:
             features = {}
-            tokenizer = RegexpTokenizer(r'\w+')
-            tokens = tokenizer.tokenize(row['fullSceneText'])
+            tokens = nltk.word_tokenize(row['fullSceneText'])
             wordcounts = collections.Counter(tokens)
             features['characters'] = row['characterCount']
             features['uniquewords'] = len(wordcounts)
-            features['words'] = len(tokens)
+            features['sentences'] = len(tokens)
             features['chars'] = len(row['fullSceneText'])
             features['sceneid'] = row['id']
             for element in self.get_feature_list():
                 features[element] = wordcounts[element]
             all_features.append(features)
         for features in all_features:
-            features = self.storeSceneFeature(features)
+            features = self.storeSceneFeature(features, cleaned)
         return 1
 
     #Stores scene features to database
-    #Note: There are tons of reserved words here, hence _count is added.
-    def storeSceneFeature(self, features):
+    #Note: There are tons of reserved sentences here, hence _count is added.
+    def storeSceneFeature(self, features, cleaned):
         global conn
         global cur
+        if cleaned:
+            table = 'features_scenes_cleaned'
+        else:
+            table = 'features_scenes'
         try:
-            cur.execute("INSERT INTO features_scenes "
+            cur.execute("INSERT INTO " + table + " "
                         "(sceneId, character_count, chars_count, words_count, uniquewords_count, comma_count, dot_count, and_count,"
                         "or_count, a_count, an_count, the_count, in_count, on_count, to_count, of_count, it_count,"
                         "that_count, as_count, is_count, so_count) "
                         "VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                        (int(features['sceneid']), int(features['characters']), int(features['chars']), int(features['words']), int(features['uniquewords']), int(features[',']),
+                        (int(features['sceneid']), int(features['characters']), int(features['chars']), int(features['sentences']), int(features['uniquewords']), int(features[',']),
                          int(features['.']), int(features['and']), int(features['or']), int(features['a']), int(features['an']),
                          int(features['the']), int(features['in']), int(features['on']), int(features['to']),
                          int(features['of']), int(features['it']), int(features['that']), int(features['as']),
@@ -147,4 +159,7 @@ class featureCollector:
 
 collector = featureCollector()
 collector.openCon()
-words = collector.collect_scene_features()
+collector.collect_sentences_features(False)
+collector.collect_sentences_features(True)
+collector.collect_scene_features(False)
+collector.collect_scene_features(True)
