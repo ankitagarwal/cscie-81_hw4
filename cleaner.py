@@ -37,7 +37,19 @@ def getLines(cur):
 
 def storeLine(line, cur, conn):
 	try:
-		cur.execute("INSERT INTO words_cleaned (id, sceneId, characterId, lineText) VALUES(%s, %s, %s, %s)", (int(line.id), int(line.scene), int(line.character), line.lineText))
+		cur.execute("INSERT INTO sentences_cleaned_unsorted (id, sceneId, characterId, lineText) VALUES(%s, %s, %s, %s)", (int(line.id), int(line.scene), int(line.character), line.lineText))
+	except:
+		print("ERROR: Could not store line")
+	try:
+		conn.commit()
+		line.id = conn.insert_id()
+		return line
+	except:
+		conn.rollback()
+
+def storeLineWithPunctuation(line, cur, conn):
+	try:
+		cur.execute("INSERT INTO sentences_cleaned_punctuation(id, sceneId, characterId, lineText) VALUES(%s, %s, %s, %s)", (int(line.id), int(line.scene), int(line.character), line.lineText))
 	except:
 		print("ERROR: Could not store line")
 	try:
@@ -75,13 +87,13 @@ def cleanAllLines():
 		line = makeLine(lineData)
 		allText = line.lineText
 		allText = allText.replace("'", "")
-		allText = allText.replace(string.punctuation, '').lower()
-		replace_punctuation = str.maketrans(string.punctuation, ' '*len(string.punctuation))
-		allText = allText.translate(replace_punctuation)
-		textArray = sorted(allText.split())
-		line.lineText = ','.join(textArray)
+		allText = allText.lower()
+		for punctuation in string.punctuation:
+			allText = allText.replace(punctuation, ' '+punctuation+' ')
+		textArray = allText.split()
+		line.lineText = ' '.join(textArray)
 		print(line.lineText)
-		storeLine(line, cur, conn)
+		storeLineWithPunctuation(line, cur, conn)
 
 	closeCon(conn)
 
@@ -107,6 +119,6 @@ def findWords():
 	saveALotOfWords(cur, conn, words)
 	closeCon(conn)
 
-#cleanAllLines()
+cleanAllLines()
 
-findWords()
+#findWords()
