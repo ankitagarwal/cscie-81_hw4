@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from sklearn.cluster import KMeans
+from sklearn.mixture import GMM
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
@@ -24,7 +25,8 @@ from line import Line
 class nGramClusters:
 	conn = None
 	cur = None
-	n = 2
+	nMin = 2
+	nMax =3
 
 	#########
 	# Open a MySQL connection. Should be triggered by the caller before running
@@ -115,20 +117,27 @@ class nGramClusters:
 
 	# custom ngram analyzer function, matching only ngrams that belong to the same line
 	def ngrams_per_line(self, doc):
-		minNgramLength = 1
-		maxNgramLength = 2
+		global nMin
+		global nMax
+
 		for ln in doc.split('\n'):
 			# tokenize the input string (customize the regex as desired)
 			terms = ln.split(' ')
 			# loop ngram creation for every number between min and max ngram length
-			for ngramLength in range(minNgramLength, maxNgramLength+1):
+			for ngramLength in range(nMin, nMax+1):
 				# find and return all ngrams
 				# for ngram in zip(*[terms[i:] for i in range(3)]): <-- solution without a generator (works the same but has higher memory usage)
 				for ngram in zip(*[islice(seq, i, len(terms)) for i, seq in enumerate(tee(terms, ngramLength))]): # <-- solution using a generator
 					ngram = ' '.join(ngram)
 					yield ngram
 
-	def makeCharacterClusters(self):
+	def makeCharacterClusters(self, type, ngramMin, ngramMax):
+		global nMin
+		global nMax
+
+		nMin = ngramMin
+		nMax = ngramMax
+
 		#bigrams must exist in 30% of the plays
 		vectorizer = TfidfVectorizer(analyzer=self.ngrams_per_line, min_df=0.3)
 		titles = []
@@ -203,7 +212,13 @@ class nGramClusters:
 
 		print(silhouetteScores)
 
-	def makeClusters(self):
+	def makeClusters(self, clusterType, ngramMin, ngramMax, withPunctuation=False, removeCharacterNames=False):
+		global nMin
+		global nMax
+
+		nMin = ngramMin
+		nMax = ngramMax
+		
 		#bigrams must exist in 30% of the plays
 		vectorizer = TfidfVectorizer(analyzer=self.ngrams_per_line, ngram_range=(2,2), min_df=0.3)
 		titles = []
@@ -215,13 +230,15 @@ class nGramClusters:
 		self.openCon()
 		for i in range(1,40):
 			#[play['title'], play['type'], play['year']], text
-			data = self.getPlayText(i, True, False)
+			data = self.getPlayText(i, withPunctuation, removeCharacterNames)
 			titles.append(data[0])
 			years.append(data[2])
 			genres.append(genrePos[data[1]])
 			texts.append(data[3])
-			#plays[title] = text
 
+		#If plays are in the same year and genre (this happens
+		#in a couple cases, this will offset them a little to make
+		#The distinction in the final chart clear)
 		for i in range(len(years)):
 			for j in range(i+1, len(years)):
 				if years[i] == years[j] and genres[i] == genres[j]:
@@ -234,19 +251,28 @@ class nGramClusters:
 		self.closeCon()
 		tfidfMatrix = vectorizer.fit_transform(texts)
 		silhouetteScores = dict()
-		#print("FEATURE NAMES:")
-		#print(vectorizer.get_feature_names())
+
 		print("Matrix shape is:")
 		print(tfidfMatrix.shape)
 		for i in range(2,10):
 			print(str(i)+" CLUSTERS")
-			km = KMeans(n_clusters=i, n_init=30)
-			clusterObjs = km.fit_predict(tfidfMatrix)
-			silhouetteAvg = silhouette_score(tfidfMatrix, clusterObjs)
+			if clusterType == "km":
+				print("Running KMeans")
+				km = KMeans(n_clusters=i, n_init=30)
+				clusterObjs = km.fit_predict(tfidfMatrix)
+				clusters = km.labels_.tolist()
+				silhouetteAvg = silhouette_score(tfidfMatrix, clusterObjs)
+			else:
+				print("Running GMM")
+				gmm = GMM(n_components=i)
+				clusterObjs = gmm.fit(tfidfMatrix.toarray())
+				clusters = gmm.predict(tfidfMatrix.toarray())
+				silhouetteAvg = silhouette_score(tfidfMatrix.toarray(), clusters)
+
 			silhouetteScores[i] = silhouetteAvg
 			print("SILHOUETTE: ")
 			print(silhouetteAvg)
-			clusters = km.labels_.tolist()
+			
 			clusterDict = dict()
 			for j in range(len(clusters)):
 				clustId = clusters[j]
@@ -264,21 +290,36 @@ class nGramClusters:
 			groups = df.groupby('label')
 			fig, ax = plt.subplots(figsize=(17, 9)) # set size
 			ax.margins(0.05)
-			i = 0
+			j = 0
 			for name, group in groups:
 				#print(name)
 				#print(group)
 				ax.plot(group.x, group.y, marker='o', linestyle='', ms=12, label=titles[0], color=cluster_colors[name], mec='none')
-				i += 1
-			for i in range(len(df)):
-				ax.text(df.ix[i]['x'], df.ix[i]['y'], df.ix[i]['title'], size=8,rotation='vertical') 
+				j += 1
+			for j in range(len(df)):
+				ax.text(df.ix[j]['x']+.15, df.ix[j]['y'], df.ix[j]['title'], size=10,rotation='vertical') 
 			y = [1, 2, 3, 4]
 			yticks = ['COMEDY', 'TRAGEDY', 'HISTORY', 'POETRY']
 			plt.yticks(y, yticks, rotation='horizontal')
-			plt.show()
+			ngramText = ""
+			if nMin != nMax:
+				ngramText = str(nMin)+"-"+str(nMax)
+			else:
+				ngramText = str(nMin)
+			ngramText = ngramText+"grams"
+			figureTitle = "All Plays, "+str(ngramText)+" "+str(clusterType)
+			if withPunctuation:
+				figureTitle = figureTitle+" with Punctuation"
+			if removeCharacterNames:
+				figureTitle = figureTitle+" character names removed"
+			figureTitle = figureTitle+" "+str(i)+" clusters"
+			plt.suptitle(figureTitle, fontsize=20)
+			if i < 4:
+				plt.show()
 
 		print(silhouetteScores)
+
 ngrammer = nGramClusters()
-#ngrammer.makeClusters()
-ngrammer.makeCharacterClusters()
+ngrammer.makeClusters("km", 1, 1, True, False)
+#ngrammer.makeCharacterClusters()
 
