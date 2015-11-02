@@ -19,6 +19,7 @@ from play import Play
 from character import Character
 from scene import Scene
 from line import Line
+from config import *
 
 
 
@@ -35,8 +36,7 @@ class nGramClusters:
 	def openCon(self):
 		global conn
 		global cur
-		conn = pymysql.connect(host='127.0.0.1', port=3306, user='root', passwd='root', db='mysql', charset='utf8')
-
+		conn = pymysql.connect(host=MYSQL_HOST, port=MYSQL_PORT, user=MYSQL_USER, passwd=MYSQL_PASSWORD, db='mysql', charset='utf8')
 		cur = conn.cursor(pymysql.cursors.DictCursor)
 		cur.execute("USE shakespeare")
 
