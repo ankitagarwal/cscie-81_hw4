@@ -176,8 +176,8 @@ class nGramClusters:
 		for i in range(2,10):
 			print(str(i)+" CLUSTERS")
 			km = KMeans(n_clusters=i, n_init=30)
-			clusterObjs = km.fit_predict(tfidfMatrix)
-			silhouetteAvg = silhouette_score(tfidfMatrix, clusterObjs)
+			labels = km.fit_predict(tfidfMatrix)
+			silhouetteAvg = silhouette_score(tfidfMatrix, labels)
 			silhouetteScores[i] = silhouetteAvg
 			print("SILHOUETTE: ")
 			print(silhouetteAvg)
@@ -211,6 +211,28 @@ class nGramClusters:
 			plt.show()
 
 		print(silhouetteScores)
+
+	def find_outliers(self, centroids, labels, tfidfMatrix):
+	# Let us find 5 points which are furthest from their centroid.
+		outliers = np.array([[0, 0],[0, 0],[0, 0],[0, 0],[0, 0]])
+		#centroids = km.cluster_centers_
+		for index, point in enumerate(tfidfMatrix):
+			dist = np.linalg.norm(point - centroids[labels[index]])
+			print("Index: "+str(index)+" distance: "+str(dist))
+			min_dist = 500000000
+			min_index = -1
+			for out_index, outlier in enumerate(outliers):
+				if outlier[1] < min_dist:
+					min_dist = outlier[1]
+					min_index = out_index
+			if (dist > min_dist):
+				outliers = np.delete(outliers, min_index, axis=0)
+				outliers = np.insert(outliers, 4, [index, dist], axis=0)
+		for outlier in outliers:
+			print("OUTLIER!")
+			print(outlier)
+			#plt.scatter(first[outlier[0]], second[outlier[0]], c='blue', marker='x', s=50)
+
 
 	def makeClusters(self, clusterType, ngramMin, ngramMax, withPunctuation=False, removeCharacterNames=False):
 		global nMin
@@ -259,13 +281,15 @@ class nGramClusters:
 			if clusterType == "km":
 				print("Running KMeans")
 				km = KMeans(n_clusters=i, n_init=30)
-				clusterObjs = km.fit_predict(tfidfMatrix)
+				labels = km.fit_predict(tfidfMatrix)
 				clusters = km.labels_.tolist()
-				silhouetteAvg = silhouette_score(tfidfMatrix, clusterObjs)
+				silhouetteAvg = silhouette_score(tfidfMatrix, labels)
+				centroids = km.cluster_centers_
+				self.find_outliers(centroids, labels, tfidfMatrix.toarray())
 			else:
 				print("Running GMM")
 				gmm = GMM(n_components=i)
-				clusterObjs = gmm.fit(tfidfMatrix.toarray())
+				labels = gmm.fit(tfidfMatrix.toarray())
 				clusters = gmm.predict(tfidfMatrix.toarray())
 				silhouetteAvg = silhouette_score(tfidfMatrix.toarray(), clusters)
 
@@ -314,12 +338,12 @@ class nGramClusters:
 				figureTitle = figureTitle+" character names removed"
 			figureTitle = figureTitle+" "+str(i)+" clusters"
 			plt.suptitle(figureTitle, fontsize=20)
-			if i < 4:
+			if i == 0:
 				plt.show()
 
 		print(silhouetteScores)
 
 ngrammer = nGramClusters()
-ngrammer.makeClusters("km", 1, 1, True, False)
+ngrammer.makeClusters("km", 1, 1, True, True)
 #ngrammer.makeCharacterClusters()
 
