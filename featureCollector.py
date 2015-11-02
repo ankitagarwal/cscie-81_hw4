@@ -60,6 +60,16 @@ class featureCollector:
             cur.execute("Select scenes.id, COUNT(Distinct characterId) AS characterCount, GROUP_CONCAT(lineText SEPARATOR ' ') AS fullSceneText from sentences JOIN scenes ON sentences.sceneId = scenes.id GROUP BY scenes.id")
         return cur
 
+    def get_plays(self, cleaned):
+        global conn
+        global cur
+        cur.execute("SET SESSION group_concat_max_len = 1000000;")
+        if (cleaned):
+            cur.execute("Select plays.id, COUNT(Distinct characterId) AS characterCount, GROUP_CONCAT(lineText SEPARATOR ' ') AS fullPlayText from sentences_cleaned JOIN scenes ON sentences_cleaned.sceneId = scenes.id JOIN plays ON scenes.id = plays.id GROUP BY plays.id")
+        else:
+            cur.execute("Select plays.id, COUNT(Distinct characterId) AS characterCount, GROUP_CONCAT(lineText SEPARATOR ' ') AS fullPlayText from sentences JOIN scenes ON sentences.sceneId = scenes.id JOIN plays ON scenes.id = plays.id GROUP BY plays.id")
+        return cur
+
     def collect_sentences_features(self, cleaned):
         sentences = self.get_sentences(cleaned)
         all_features = []
@@ -158,9 +168,62 @@ class featureCollector:
             print("ERROR: Could not store scene feature")
             conn.rollback()
 
+    def collect_play_features(self, cleaned):
+        plays = self.get_plays(cleaned)
+        all_features = []
+        for row in plays:
+            features = {}
+            tokens = nltk.word_tokenize(row['fullPlayText'])
+            wordcounts = collections.Counter(tokens)
+            features['characters'] = row['characterCount']
+            features['uniquewords'] = len(wordcounts)
+            features['sentences'] = len(tokens)
+            features['chars'] = len(row['fullPlayText'])
+            features['playid'] = row['id']
+            for element in self.get_feature_list():
+                features[element] = wordcounts[element]
+            all_features.append(features)
+        for features in all_features:
+            features = self.storePlayFeature(features, cleaned)
+        return 1
+
+    #Stores Play features to database
+    #Note: There are tons of reserved sentences here, hence _count is added.
+    def storePlayFeature(self, features, cleaned):
+        global conn
+        global cur
+        if cleaned:
+            table = 'features_plays_cleaned'
+        else:
+            table = 'features_plays'
+        try:
+            cur.execute("INSERT INTO " + table + " "
+                        "(playId, character_count, chars_count, words_count, uniquewords_count, comma_count, dot_count, and_count,"
+                        "or_count, a_count, an_count, the_count, in_count, on_count, to_count, of_count, it_count,"
+                        "that_count, as_count, is_count, so_count) "
+                        "VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                        (int(features['playid']), int(features['characters']), int(features['chars']), int(features['sentences']), int(features['uniquewords']), int(features[',']),
+                         int(features['.']), int(features['and']), int(features['or']), int(features['a']), int(features['an']),
+                         int(features['the']), int(features['in']), int(features['on']), int(features['to']),
+                         int(features['of']), int(features['it']), int(features['that']), int(features['as']),
+                         int(features['is']), int(features['so'])))
+        except:
+            print("ERROR: Could not store play feature")
+        try:
+            conn.commit()
+            features['id'] = conn.insert_id()
+            return features
+        except:
+            print("ERROR: Could not store play feature")
+            conn.rollback()
+
+
+
 collector = featureCollector()
 collector.openCon()
-collector.collect_sentences_features(False)
-collector.collect_sentences_features(True)
-collector.collect_scene_features(False)
-collector.collect_scene_features(True)
+# collector.collect_sentences_features(False)
+# collector.collect_sentences_features(True)
+# collector.collect_scene_features(False)
+# collector.collect_scene_features(True)
+collector.collect_play_features(False)
+collector.collect_play_features(True)
