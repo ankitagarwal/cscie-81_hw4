@@ -8,6 +8,7 @@ from itertools import tee, islice
 from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
+import collections
 
 from sklearn.cluster import KMeans
 from sklearn.mixture import GMM
@@ -171,16 +172,14 @@ class nGramClusters:
 		silhouetteScores = dict()
 		#print("FEATURE NAMES:")
 		#print(vectorizer.get_feature_names())
-		print("Matrix shape is:")
-		print(tfidfMatrix.shape)
+
 		for i in range(2,10):
 			print(str(i)+" CLUSTERS")
 			km = KMeans(n_clusters=i, n_init=30)
 			labels = km.fit_predict(tfidfMatrix)
 			silhouetteAvg = silhouette_score(tfidfMatrix, labels)
 			silhouetteScores[i] = silhouetteAvg
-			print("SILHOUETTE: ")
-			print(silhouetteAvg)
+
 			clusters = km.labels_.tolist()
 			clusterDict = dict()
 			for j in range(len(clusters)):
@@ -189,8 +188,6 @@ class nGramClusters:
 				if clustId not in clusterDict:
 					clusterDict[clustId] = ""
 				clusterDict[clustId] += names[j]+", "
-			for k, v in clusterDict.items():
-				print(str(k)+": "+str(v))
 
 			df = pd.DataFrame(dict(x=xPos, y=titles, label=clusters, title=names))
 			groups = df.groupby('label')
@@ -198,8 +195,6 @@ class nGramClusters:
 			ax.margins(0.05)
 			i = 0
 			for name, group in groups:
-				print(name)
-				print(group)
 				ax.plot(group.x, group.y, marker='o', linestyle='', ms=12, label=names[0], color=cluster_colors[name], mec='none')
 				i += 1
 			for i in range(len(df)):
@@ -214,24 +209,22 @@ class nGramClusters:
 
 	def find_outliers(self, centroids, labels, tfidfMatrix):
 	# Let us find 5 points which are furthest from their centroid.
-		outliers = np.array([[0, 0],[0, 0],[0, 0],[0, 0],[0, 0]])
+		outliers = dict()
 		#centroids = km.cluster_centers_
 		for index, point in enumerate(tfidfMatrix):
 			dist = np.linalg.norm(point - centroids[labels[index]])
-			print("Index: "+str(index)+" distance: "+str(dist))
-			min_dist = 500000000
-			min_index = -1
-			for out_index, outlier in enumerate(outliers):
-				if outlier[1] < min_dist:
-					min_dist = outlier[1]
-					min_index = out_index
-			if (dist > min_dist):
-				outliers = np.delete(outliers, min_index, axis=0)
-				outliers = np.insert(outliers, 4, [index, dist], axis=0)
-		for outlier in outliers:
-			print("OUTLIER!")
-			print(outlier)
-			#plt.scatter(first[outlier[0]], second[outlier[0]], c='blue', marker='x', s=50)
+			outliers[index] = dist
+		outliers = collections.OrderedDict(outliers)
+		outliers = collections.OrderedDict(sorted(outliers.items(), key=lambda t: t[1], reverse=False))
+		print(outliers)
+		returnList = []
+		for i in range(0,3):
+			indexDist = outliers.popitem()
+			returnList.append(indexDist[0])
+
+		return returnList
+
+
 
 
 	def makeClusters(self, clusterType, ngramMin, ngramMax, withPunctuation=False, removeCharacterNames=False):
@@ -254,6 +247,7 @@ class nGramClusters:
 			#[play['title'], play['type'], play['year']], text
 			data = self.getPlayText(i, withPunctuation, removeCharacterNames)
 			titles.append(data[0])
+			print(str(i)+": "+data[0])
 			years.append(data[2])
 			genres.append(genrePos[data[1]])
 			texts.append(data[3])
@@ -273,7 +267,7 @@ class nGramClusters:
 		self.closeCon()
 		tfidfMatrix = vectorizer.fit_transform(texts)
 		silhouetteScores = dict()
-
+		outliers = dict()
 		print("Matrix shape is:")
 		print(tfidfMatrix.shape)
 		for i in range(2,10):
@@ -285,7 +279,9 @@ class nGramClusters:
 				clusters = km.labels_.tolist()
 				silhouetteAvg = silhouette_score(tfidfMatrix, labels)
 				centroids = km.cluster_centers_
-				self.find_outliers(centroids, labels, tfidfMatrix.toarray())
+				outliers = self.find_outliers(centroids, labels, tfidfMatrix.toarray())
+				print("OUTLIERS ARE:")
+				print(outliers)
 			else:
 				print("Running GMM")
 				gmm = GMM(n_components=i)
@@ -310,16 +306,31 @@ class nGramClusters:
 
 			firstYear = min(years)
 			lastYear = max(years)
+			outYears = []
+			outGenres = []
+			outTitles = []
+			for outlier in outliers:
+				outYears.append(years[outlier])
+				outGenres.append(genres[outlier])
+				outTitles.append(titles[outlier])
+
 			df = pd.DataFrame(dict(x=years, y=genres, label=clusters, title=titles))
+			outdf = pd.DataFrame(dict(x=outYears, y=outGenres, label=['outlier' for i in range(len(outYears))], title=outTitles))
 			groups = df.groupby('label')
+			outGroups = outdf.groupby('label')
 			fig, ax = plt.subplots(figsize=(17, 9)) # set size
 			ax.margins(0.05)
+			
+			for name, group in outGroups:
+				ax.plot(group.x, group.y, marker='o', linestyle='', ms=20, label=titles[0], color='#000000', mec='none')
+
+
 			j = 0
 			for name, group in groups:
-				#print(name)
-				#print(group)
+
 				ax.plot(group.x, group.y, marker='o', linestyle='', ms=12, label=titles[0], color=cluster_colors[name], mec='none')
 				j += 1
+
 			for j in range(len(df)):
 				ax.text(df.ix[j]['x']+.15, df.ix[j]['y'], df.ix[j]['title'], size=10,rotation='vertical') 
 			y = [1, 2, 3, 4]
@@ -338,12 +349,12 @@ class nGramClusters:
 				figureTitle = figureTitle+" character names removed"
 			figureTitle = figureTitle+" "+str(i)+" clusters"
 			plt.suptitle(figureTitle, fontsize=20)
-			if i == 0:
+			if i < 10:
 				plt.show()
 
 		print(silhouetteScores)
 
 ngrammer = nGramClusters()
 ngrammer.makeClusters("km", 1, 1, True, True)
-#ngrammer.makeCharacterClusters()
+ngrammer.makeCharacterClusters()
 
