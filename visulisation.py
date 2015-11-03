@@ -76,7 +76,7 @@ def do_gmm(title, X, first, second, clusters = 4):
     ax = plt.gca()
     ax.scatter(first, second, c=label_color, alpha=0.8)
     plt.title(title)
-    # plt.show()
+    plt.show()
     print("Silhouette score - ", silhouetteAvg)
 
 # Clean data and get it ready for clustering.
@@ -132,74 +132,67 @@ def clusterTimeline(X, clusters, figureTitle):
     clusterDict = dict()
     for j in range(len(clusters)):
         clustId = clusters[j]
-        #Iterate through the clusters and group scenes names
+        #Iterate through the clusters and group play names
         if clustId not in clusterDict:
             clusterDict[clustId] = ""
         clusterDict[clustId] += titles[j]+", "
-    for k, v in clusterDict.items():
-        print(str(k)+": "+str(v))
 
-        print(len(years))
-        print(len(genres))
-        print(len(clusters))
-        print(len(titles))
-
-        df = pd.DataFrame(dict(x=years, y=genres, label=clusters, title=titles))
-        groups = df.groupby('label')
-        fig, ax = plt.subplots(figsize=(17, 9)) # set size
-        ax.margins(0.05)
-        j = 0
-        for name, group in groups:
-            #print(name)
-            #print(group)
-            ax.plot(group.x, group.y, marker='o', linestyle='', ms=12, label=titles[0], color=cluster_colors[name], mec='none')
-            j += 1
-        for j in range(len(df)):
-            ax.text(df.ix[j]['x']+.15, df.ix[j]['y'], df.ix[j]['title'], size=10,rotation='vertical')
-        y = [1, 2, 3, 4]
-        yticks = ['COMEDY', 'TRAGEDY', 'HISTORY', 'POETRY']
-        plt.yticks(y, yticks, rotation='horizontal')
-        ngramText = ""
-        plt.suptitle(figureTitle, fontsize=20)
-        plt.show()
+    df = pd.DataFrame(dict(x=years, y=genres, label=clusters, title=titles))
+    groups = df.groupby('label')
+    fig, ax = plt.subplots(figsize=(17, 9)) # set size
+    ax.margins(0.05)
+    j = 0
+    for name, group in groups:
+        #print(name)
+        #print(group)
+        ax.plot(group.x, group.y, marker='o', linestyle='', ms=12, label=titles[0], color=cluster_colors[name], mec='none')
+        j += 1
+    for j in range(len(df)):
+        ax.text(df.ix[j]['x']+.15, df.ix[j]['y'], df.ix[j]['title'], size=10,rotation='vertical')
+    y = [1, 2, 3, 4]
+    yticks = ['COMEDY', 'TRAGEDY', 'HISTORY', 'POETRY']
+    plt.yticks(y, yticks, rotation='horizontal')
+    ngramText = ""
+    plt.suptitle(figureTitle, fontsize=20)
+    plt.show()
 
 
 openCon()
-# # Raw data plot
-# cur.execute("Select * from features_scenes")
-# X, first, second = prep_data(cur)
-# plt.scatter(first, second, marker='o')
-# plt.title("Raw data (scenes with punctuations) with dimensions reduced to 2 using PCA")
-# plt.show()
-#
-# # Cleaned Raw data plot
-# cur.execute("Select * from features_scenes_cleaned")
-# X_cleaned, first_cleaned, second_cleaned = prep_data(cur)
-# plt.scatter(first_cleaned, second_cleaned, marker='o')
-# plt.title("Raw data (scenes  without punctuations) with dimensions reduced to 2 using PCA")
-# plt.show()
-#
-# # K-means for data with punctuation.
-# for i in range(2, 10):
-#     do_kmeans('K-means clustered data with dimensions reduced to 2 using PCA \n(scenes  with punctuations)\n'
-#               'outliers are marked with x (' + str(i) +' Clusters)', X, first, second, i)
-#
-#
-# # GMM for data with punctuation.
-# for i in range(2, 10):
-#     do_gmm('GMM clustered data with dimensions reduced to 2 using PCA \n(scenes  with punctuations)\n'
-#            '(' + str(i) +' clusters)', X, first, second, i)
-#
-#
-# # Let us do K-means now for data without punctuation.
-# for i in range(2, 10):
-#     do_kmeans('K-means clustered data with dimensions reduced to 2 using PCA \n(scenes  without punctuations)\n'
-#                   'outliers are marked with x (' + str(i) +' Clusters)', X_cleaned, first_cleaned, second_cleaned, i)
-#
-# # GMM, here I come for data without punctuation.
-# for i in range(2, 10):
-#     do_gmm('GMM clustered data with dimensions reduced to 2 using PCA \n(scenes  without punctuations)\n'
-#            '(' + str(i) +' clusters)', X_cleaned, first, second, i)
+# Raw data plot
+cur.execute("Select * from features_scenes")
+X, first, second = prep_data(cur)
+plt.scatter(first, second, marker='o')
+plt.title("Raw data (scenes with punctuations) with dimensions reduced to 2 using PCA")
+plt.show()
+
+# Cleaned Raw data plot
+cur.execute("Select * from features_scenes_cleaned")
+X_cleaned, first_cleaned, second_cleaned = prep_data(cur)
+plt.scatter(first_cleaned, second_cleaned, marker='o')
+plt.title("Raw data (scenes  without punctuations) with dimensions reduced to 2 using PCA")
+plt.show()
+
+# K-means for data with punctuation.
+for i in range(2, 10):
+    do_kmeans('K-means clustered data with dimensions reduced to 2 using PCA \n(scenes  with punctuations)\n'
+              'outliers are marked with x (' + str(i) +' Clusters)', X, first, second, i)
+
+
+# GMM for data with punctuation.
+for i in range(2, 10):
+    do_gmm('GMM clustered data with dimensions reduced to 2 using PCA \n(scenes  with punctuations)\n'
+           '(' + str(i) +' clusters)', X, first, second, i)
+
+
+# Let us do K-means now for data without punctuation.
+for i in range(2, 10):
+    do_kmeans('K-means clustered data with dimensions reduced to 2 using PCA \n(scenes  without punctuations)\n'
+                  'outliers are marked with x (' + str(i) +' Clusters)', X_cleaned, first_cleaned, second_cleaned, i)
+
+# GMM, here I come for data without punctuation.
+for i in range(2, 10):
+    do_gmm('GMM clustered data with dimensions reduced to 2 using PCA \n(scenes  without punctuations)\n'
+           '(' + str(i) +' clusters)', X_cleaned, first, second, i)
 
 
 # Play clustering
