@@ -8,6 +8,7 @@ from sklearn.cluster import KMeans
 from sklearn import mixture
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import silhouette_score
+from config import *
 
 #########
 # Open a MySQL connection. Should be triggered by the caller before running
@@ -16,7 +17,7 @@ from sklearn.metrics import silhouette_score
 def openCon():
     global conn
     global cur
-    conn = pymysql.connect(host='127.0.0.1', port=3306, user='root', passwd='', db='mysql', charset='utf8')
+    conn = pymysql.connect(host=MYSQL_HOST, port=MYSQL_PORT, user=MYSQL_USER, passwd=MYSQL_PASSWORD, db='mysql', charset='utf8')
 
     cur = conn.cursor(pymysql.cursors.DictCursor)
     cur.execute("USE shakespeare")
